@@ -1,0 +1,299 @@
+{
+  "info": {
+    "_postman_id": "bwc-claude-api-collection",
+    "name": "build-with-claude-api",
+    "description": "API Gateway endpoints for the build-with-claude-api NestJS monorepo.\n\nStart infrastructure and all three services before sending requests:\n- npm run docker:up\n- npm run start:dev:anthropic\n- npm run start:dev:conversation\n- npm run start:dev:gateway",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Gateway liveness check."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stateless Conversations",
+      "description": "One-off requests without session persistence. Full message array is sent on each call.",
+      "item": [
+        {
+          "name": "One Shot",
+          "item": [
+            {
+              "name": "Generate (one_shot)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"anthropic\",\n  \"messageType\": \"one_shot\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Say hello in one word.\"\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/conversations",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["conversations"]
+                },
+                "description": "Stateless single-turn request."
+              },
+              "response": []
+            },
+            {
+              "name": "Generate with model override",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"anthropic\",\n  \"messageType\": \"one_shot\",\n  \"model\": \"claude-haiku-4-5\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"What is 2 + 2? Reply with the number only.\"\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/conversations",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["conversations"]
+                },
+                "description": "Optional model field overrides ANTHROPIC_DEFAULT_MODEL."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Multi-message (conversation type)",
+          "item": [
+            {
+              "name": "Generate (conversation)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"anthropic\",\n  \"messageType\": \"conversation\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"My name is Alex.\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"Nice to meet you, Alex.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"What is my name?\"\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/conversations",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["conversations"]
+                },
+                "description": "Stateless multi-turn: client sends full message history in the body."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Stream",
+          "item": [
+            {
+              "name": "Stream response (SSE)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "text/event-stream"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"anthropic\",\n  \"messageType\": \"stream\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Write a two-sentence poem about the moon.\"\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/conversations/stream",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["conversations", "stream"]
+                },
+                "description": "Server-sent events stream. Postman shows raw SSE chunks in the response body."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "description": "Multi-turn chat with history stored in Postgres. Create a session first, then send messages using {{sessionId}}.",
+      "item": [
+        {
+          "name": "Session Management",
+          "item": [
+            {
+              "name": "Create Session",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200 || pm.response.code === 201) {",
+                      "  const body = pm.response.json();",
+                      "  if (body.id) {",
+                      "    pm.collectionVariables.set('sessionId', body.id);",
+                      "    pm.environment.set('sessionId', body.id);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"anthropic\",\n  \"title\": \"My chat\",\n  \"model\": \"claude-haiku-4-5\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/sessions",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["sessions"]
+                },
+                "description": "Creates a conversation session. Saves returned id to {{sessionId}}."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Session Messages",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["sessions", "{{sessionId}}", "messages"]
+                },
+                "description": "Returns full chat history for the session ordered by createdAt."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Session Chat",
+          "item": [
+            {
+              "name": "Send Message",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"content\": \"Hello! Remember my name is Alex.\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["sessions", "{{sessionId}}", "messages"]
+                },
+                "description": "Sends one user turn. History is loaded from DB automatically."
+              },
+              "response": []
+            },
+            {
+              "name": "Send Follow-up Message",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"content\": \"What is my name?\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["sessions", "{{sessionId}}", "messages"]
+                },
+                "description": "Second turn in the same session — prior messages are included automatically."
+              },
+              "response": []
+            },
+            {
+              "name": "Send Message (stream)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "text/event-stream"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"content\": \"Tell me a very short story about a rabbit.\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/sessions/{{sessionId}}/messages/stream",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["sessions", "{{sessionId}}", "messages", "stream"]
+                },
+                "description": "Streamed session turn. Assistant reply is saved to DB when the stream completes."
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

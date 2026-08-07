@@ -1,98 +1,249 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# build-with-claude-api
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS monorepo for AI conversations over Anthropic (and future providers). HTTP clients talk to a thin API gateway; business logic runs in a conversation microservice; provider adapters talk to external AI APIs via RabbitMQ only.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Architecture
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+HTTP Client
+    │
+    ▼
+api-gateway (HTTP + SSE)
+    │ RabbitMQ
+    ▼
+conversation-service (business logic, Postgres, Redis, provider factory)
+    │ RabbitMQ
+    ▼
+anthropic-service (API key + SDK only, no DB)
+    │
+    ▼
+Anthropic API
 ```
 
-## Compile and run the project
+| Service | Transport | Responsibility |
+|---------|-----------|----------------|
+| `apps/api-gateway` | HTTP, hybrid RMQ for SSE | Public REST/SSE endpoints |
+| `apps/conversation-service` | RabbitMQ | Sessions, audit log, cache, provider factory |
+| `apps/anthropic-service` | RabbitMQ only | Thin Anthropic adapter |
+| `libs/shared` | — | DTOs, enums, RMQ patterns |
+| `libs/database` | — | TypeORM entities and module |
 
-```bash
-# development
-$ npm run start
+Future providers (e.g. OpenAI) add a new adapter app plus a factory branch in `conversation-service`. The gateway API stays the same.
 
-# watch mode
-$ npm run start:dev
+## Project structure
 
-# production mode
-$ npm run start:prod
+```
+apps/
+  api-gateway/           # HTTP entry point
+  conversation-service/  # Business logic + Postgres + Redis
+  anthropic-service/     # Dumb AI adapter
+libs/
+  shared/                # Shared contracts
+  database/              # TypeORM entities
+docker-compose.yml       # Postgres, RabbitMQ, Redis
+.env                     # Local configuration (not committed with secrets)
 ```
 
-## Run tests
+## Prerequisites
+
+- Node.js 20+
+- Docker and Docker Compose
+- Anthropic API key
+
+## Setup
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm install
 ```
 
-## Deployment
+Create or edit `.env` at the repo root (see table below). Do not commit secrets.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Variable | Description |
+|----------|-------------|
+| `PORT` | Gateway HTTP port (default `3000`) |
+| `RABBITMQ_URL` | AMQP connection string |
+| `RABBITMQ_QUEUE_*` | Queue names for each service |
+| `POSTGRES_*` | Postgres connection (conversation-service) |
+| `REDIS_HOST` / `REDIS_PORT` | Redis cache (host port `6380` maps to container `6379`) |
+| `ANTHROPIC_API_KEY` | Anthropic key (anthropic-service only) |
+| `ANTHROPIC_DEFAULT_MODEL` | Default model (currently `claude-haiku-4-5`) |
+| `TYPEORM_SYNC` | `true` in dev to auto-create schema |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Infrastructure
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run docker:up
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+| Service | Host port | Notes |
+|---------|-----------|-------|
+| Postgres | `5432` | DB `ai_platform`, user/password `app` |
+| RabbitMQ | `5672` | AMQP |
+| RabbitMQ UI | `15672` | http://localhost:15672 (guest/guest) |
+| Redis | `6380` | Mapped from container `6379` |
 
-## Resources
+If RabbitMQ fails to bind ports, stop conflicting containers and run:
 
-Check out a few resources that may come in handy when working with NestJS:
+```bash
+docker compose up -d --force-recreate rabbitmq
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Run services
 
-## Support
+Start infrastructure first, then each app in its own terminal:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+npm run docker:up
+npm run start:dev:anthropic
+npm run start:dev:conversation
+npm run start:dev:gateway
+```
 
-## Stay in touch
+Production builds:
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```bash
+npm run build
+npm run start:prod:anthropic
+npm run start:prod:conversation
+npm run start:prod:gateway
+```
+
+## HTTP API
+
+Base URL: `http://localhost:3000`
+
+### Health
+
+```http
+GET /health
+```
+
+### Stateless conversations
+
+One-shot or custom message arrays without session persistence.
+
+```http
+POST /conversations
+Content-Type: application/json
+
+{
+  "provider": "anthropic",
+  "messageType": "one_shot",
+  "messages": [{ "role": "user", "content": "Hello" }]
+}
+```
+
+```http
+POST /conversations/stream
+Content-Type: application/json
+Accept: text/event-stream
+
+{
+  "provider": "anthropic",
+  "messageType": "stream",
+  "messages": [{ "role": "user", "content": "Hello" }]
+}
+```
+
+`messageType`: `one_shot` | `conversation` | `stream`
+
+### Session-based multi-turn chat
+
+History is stored in Postgres per session.
+
+```http
+POST /sessions
+Content-Type: application/json
+
+{ "provider": "anthropic", "title": "My chat", "model": "claude-haiku-4-5" }
+```
+
+```http
+POST /sessions/:id/messages
+Content-Type: application/json
+
+{ "content": "Hello" }
+```
+
+```http
+POST /sessions/:id/messages/stream
+Content-Type: application/json
+
+{ "content": "Tell me a short story" }
+```
+
+```http
+GET /sessions/:id/messages
+```
+
+Session chat loads full history from the database, appends the user turn, calls the provider via the factory, and saves the assistant reply. Streamed turns persist the full assistant message when the stream completes.
+
+## Database
+
+| Table | Purpose |
+|-------|---------|
+| `conversation_sessions` | Chat sessions (`provider`, `model`, `title`) |
+| `conversation_messages` | User/assistant messages per session |
+| `ai_requests` | Audit log (provider, status, payload hash, timestamps) |
+
+Only `conversation-service` uses Postgres and Redis. `anthropic-service` has no database access.
+
+## RabbitMQ patterns
+
+Defined in `libs/shared/src/constants/rmq-patterns.ts`:
+
+| Pattern | Direction | Purpose |
+|---------|-----------|---------|
+| `conversation.handle` | gateway → conversation | Stateless request |
+| `conversation.stream` | gateway → conversation | Stateless stream start |
+| `session.create` | gateway → conversation | Create session |
+| `session.getMessages` | gateway → conversation | List session messages |
+| `session.sendMessage` | gateway → conversation | Multi-turn sync chat |
+| `session.sendMessageStream` | gateway → conversation | Multi-turn stream |
+| `anthropic.invoke` | conversation → anthropic | Sync AI call |
+| `anthropic.stream` | conversation → anthropic | Stream AI call |
+| `ai.stream.*` | anthropic → conversation | Stream chunk/end/error events |
+| `conversation.stream.*` | conversation → gateway | SSE relay events |
+
+## Provider factory
+
+The `provider` field in requests routes to the correct adapter:
+
+- `anthropic` → `anthropic-service` (implemented)
+- `openai` → stub for future `openai-service`
+
+Business payloads (`ConversationRequestDto`, session DTOs) are mapped to provider-ready `ProviderInvokeDto` before hitting the adapter.
+
+## Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run build` | Build all apps |
+| `npm run start:dev:gateway` | Gateway with watch |
+| `npm run start:dev:conversation` | Conversation service with watch |
+| `npm run start:dev:anthropic` | Anthropic service with watch |
+| `npm run docker:up` / `docker:down` | Start/stop infrastructure |
+| `npm test` | Unit tests |
+| `npm run lint` | ESLint |
+
+## Postman
+
+Import the collection and local environment from `postman/`:
+
+- `postman/build-with-claude-api.postman_collection.json`
+- `postman/local.postman_environment.json`
+
+Folders: **Health**, **Stateless Conversations** (One Shot, Multi-message, Stream), **Sessions** (Session Management, Session Chat).
+
+Run **Create Session** first; it saves `sessionId` for the session chat requests.
+
+## Testing
+
+```bash
+npm test
+npm run test:cov
+```
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+UNLICENSED (private)

@@ -1,0 +1,44 @@
+---
+description: Keep README.md in sync when architecture, API, or infra changes
+alwaysApply: true
+---
+
+# README sync
+
+This project uses a single markdown doc: [README.md](../../README.md). Do not add other `.md` files unless Majid explicitly approves.
+
+## When to update README
+
+After completing code changes, update README in the **same task** if any of these changed:
+
+- Service layout, responsibilities, or communication (HTTP, RabbitMQ, SSE)
+- HTTP routes, request/response shapes, or session behavior
+- RabbitMQ queue names or patterns in `libs/shared`
+- Database entities or tables
+- Docker Compose services or host ports
+- `.env` variables or npm scripts
+- Default models, providers, or factory routing
+
+## What to update
+
+Keep README accurate and concise. Touch only sections affected by the change:
+
+1. **Architecture** — diagram and service table
+2. **Project structure** — new apps, libs, or key paths
+3. **HTTP API** — endpoints, bodies, examples
+4. **Database** — tables and which service owns them
+5. **RabbitMQ patterns** — new or renamed patterns
+6. **Setup / Infrastructure** — env vars, ports, run commands
+
+Do not paste secrets (API keys, passwords). Use placeholders in examples.
+
+## How to update
+
+1. Read the current README before editing.
+2. Apply the minimal diff needed; remove stale starter or outdated content.
+3. Verify examples match actual routes and DTOs in `apps/api-gateway` and `libs/shared`.
+4. If the change is internal-only (refactor, rename, test), skip README unless it affects architecture or public API.
+
+## Completion rule
+
+Do not mark architecture or API work done until README reflects the change, or you explicitly note in the response that README needed no update and why.
