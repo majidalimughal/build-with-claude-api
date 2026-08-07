@@ -46,7 +46,7 @@ docker-compose.yml       # Postgres, RabbitMQ, Redis
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - Docker and Docker Compose
 - Anthropic API key
 
