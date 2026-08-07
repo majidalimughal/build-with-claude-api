@@ -99,14 +99,16 @@ npm run start:dev:conversation
 npm run start:dev:gateway
 ```
 
-Production builds:
+Production (run from repo root so `.env` is loaded):
 
 ```bash
 npm run build
-npm run start:prod:anthropic
-npm run start:prod:conversation
-npm run start:prod:gateway
+npm run start:prod:anthropic    # nest start anthropic-service --prod
+npm run start:prod:conversation # nest start conversation-service --prod
+npm run start:prod:gateway        # nest start api-gateway --prod
 ```
+
+Build output: `dist/apps/<app>/main.js` (webpack bundle). Prod scripts use Nest CLI `--prod` so entry paths stay correct without hard-coded `node dist/...` paths.
 
 ## HTTP API
 
@@ -218,10 +220,13 @@ Business payloads (`ConversationRequestDto`, session DTOs) are mapped to provide
 
 | Script | Description |
 |--------|-------------|
-| `npm run build` | Build all apps |
+| `npm run build` | Build all apps (webpack → `dist/apps/<app>/main.js`) |
 | `npm run start:dev:gateway` | Gateway with watch |
 | `npm run start:dev:conversation` | Conversation service with watch |
 | `npm run start:dev:anthropic` | Anthropic service with watch |
+| `npm run start:prod:gateway` | Gateway production (`nest start --prod`) |
+| `npm run start:prod:conversation` | Conversation service production |
+| `npm run start:prod:anthropic` | Anthropic service production |
 | `npm run docker:up` / `docker:down` | Start/stop infrastructure |
 | `npm test` | Unit tests |
 | `npm run lint` | ESLint |

@@ -17,9 +17,9 @@
     "start:dev:gateway": "nest start api-gateway --watch",
     "start:dev:conversation": "nest start conversation-service --watch",
     "start:dev:anthropic": "nest start anthropic-service --watch",
-    "start:prod:gateway": "node dist/apps/api-gateway/main",
-    "start:prod:conversation": "node dist/apps/conversation-service/main",
-    "start:prod:anthropic": "node dist/apps/anthropic-service/main",
+    "start:prod:gateway": "nest start api-gateway --prod",
+    "start:prod:conversation": "nest start conversation-service --prod",
+    "start:prod:anthropic": "nest start anthropic-service --prod",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "lint": "eslint \"{apps,libs,test}/**/*.ts\" --fix",
@@ -27,7 +27,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./apps/api-gateway/test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",
