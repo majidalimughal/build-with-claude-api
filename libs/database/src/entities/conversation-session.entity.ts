@@ -6,7 +6,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { AiProvider } from '@app/shared';
+import { AiProvider, SystemPromptType } from '@app/shared';
 import { ConversationMessage } from './conversation-message.entity';
 
 @Entity('conversation_sessions')
@@ -22,6 +22,13 @@ export class ConversationSession {
 
   @Column({ type: 'varchar', nullable: true })
   title: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: SystemPromptType,
+    default: SystemPromptType.TRAVEL_AGENT_PAKISTAN,
+  })
+  systemPromptType: SystemPromptType;
 
   @OneToMany(() => ConversationMessage, (message) => message.session)
   messages: ConversationMessage[];

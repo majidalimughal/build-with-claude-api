@@ -5,5 +5,7 @@ export * from './enums/ai-provider.enum';
 export * from './enums/message-type.enum';
 export * from './enums/message-role.enum';
 export * from './enums/ai-request-status.enum';
+export * from './enums/system-prompt-type.enum';
 export * from './constants/rmq-patterns';
+export * from './constants/system-prompts';
 export * from './utils/hash.util';

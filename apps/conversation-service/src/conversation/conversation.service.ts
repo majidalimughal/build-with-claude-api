@@ -3,10 +3,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Cache } from 'cache-manager';
 import {
+  AiProvider,
   ConversationRequestDto,
   ConversationResponse,
   MessageType,
   ProviderInvokeDto,
+  resolveSystemPrompt,
 } from '@app/shared';
 import { hashPayload } from '@app/shared';
 import { AiProviderFactory } from '../ai/ai-provider.factory';
@@ -15,6 +17,7 @@ import { AuditService } from './audit.service';
 @Injectable()
 export class ConversationService {
   private readonly defaultModel: string;
+  private readonly defaultProvider: AiProvider;
   private readonly streamAudits = new Map<string, string>();
 
   constructor(
@@ -27,21 +30,26 @@ export class ConversationService {
       'ANTHROPIC_DEFAULT_MODEL',
       'claude-haiku-4-5',
     );
+    this.defaultProvider = config.get<AiProvider>(
+      'DEFAULT_PROVIDER',
+      AiProvider.ANTHROPIC,
+    );
   }
 
   async handle(dto: ConversationRequestDto): Promise<ConversationResponse> {
-    const cacheKey = `conversation:${hashPayload(dto)}`;
+    const resolved = this.withDefaultProvider(dto);
+    const cacheKey = `conversation:${hashPayload(resolved)}`;
     const cached = await this.cacheManager.get<ConversationResponse>(cacheKey);
     if (cached) {
       return cached;
     }
 
-    const audit = await this.auditService.createPending(dto);
+    const audit = await this.auditService.createPending(resolved);
     await this.auditService.markProcessing(audit.id);
 
     try {
-      const provider = this.aiProviderFactory.getProvider(dto.provider);
-      const payload = this.toProviderPayload(dto, false);
+      const provider = this.aiProviderFactory.getProvider(resolved.provider);
+      const payload = this.toProviderPayload(resolved, false);
       const result = await provider.invoke(payload);
 
       await this.auditService.markCompleted(audit.id, result.content);
@@ -52,7 +60,7 @@ export class ConversationService {
         usage: result.usage,
       };
 
-      if (dto.messageType === MessageType.ONE_SHOT) {
+      if (resolved.messageType === MessageType.ONE_SHOT) {
         await this.cacheManager.set(cacheKey, response);
       }
 
@@ -65,17 +73,18 @@ export class ConversationService {
   }
 
   async startStream(dto: ConversationRequestDto): Promise<{ correlationId: string; auditId: string }> {
-    const correlationId = dto.correlationId ?? crypto.randomUUID();
+    const resolved = this.withDefaultProvider(dto);
+    const correlationId = resolved.correlationId ?? crypto.randomUUID();
     const audit = await this.auditService.createPending(
-      { ...dto, correlationId },
+      { ...resolved, correlationId },
       correlationId,
     );
     await this.auditService.markProcessing(audit.id);
 
     try {
-      const provider = this.aiProviderFactory.getProvider(dto.provider);
+      const provider = this.aiProviderFactory.getProvider(resolved.provider);
       const payload = this.toProviderPayload(
-        { ...dto, correlationId },
+        { ...resolved, correlationId },
         true,
       );
       await provider.stream(payload);
@@ -87,6 +96,15 @@ export class ConversationService {
       await this.auditService.markFailed(audit.id, message);
       throw error;
     }
+  }
+
+  private withDefaultProvider(
+    dto: ConversationRequestDto,
+  ): ConversationRequestDto & { provider: AiProvider } {
+    return {
+      ...dto,
+      provider: dto.provider ?? this.defaultProvider,
+    };
   }
 
   async onStreamEnd(correlationId: string): Promise<void> {
@@ -115,6 +133,7 @@ export class ConversationService {
       stream,
       correlationId: dto.correlationId,
       options: dto.options,
+      system: resolveSystemPrompt(dto.systemPromptType),
     };
   }
 }

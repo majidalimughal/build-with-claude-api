@@ -31,6 +31,10 @@ export class ProviderInvokeDto {
   correlationId?: string;
 
   @IsOptional()
+  @IsString()
+  system?: string;
+
+  @IsOptional()
   @IsObject()
   options?: Record<string, unknown>;
 }

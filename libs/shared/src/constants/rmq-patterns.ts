@@ -36,6 +36,8 @@ export interface ProviderInvokeResponse {
   usage?: {
     inputTokens?: number;
     outputTokens?: number;
+    cacheCreationInputTokens?: number;
+    cacheReadInputTokens?: number;
   };
 }
 

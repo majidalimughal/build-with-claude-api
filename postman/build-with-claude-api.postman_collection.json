@@ -54,7 +54,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"provider\": \"anthropic\",\n  \"messageType\": \"one_shot\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Say hello in one word.\"\n    }\n  ]\n}"
+                  "raw": "{\n  \"provider\": \"anthropic\",\n  \"messageType\": \"one_shot\",\n  \"systemPromptType\": \"travel_agent_pakistan\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Suggest a 3-day itinerary for Lahore.\"\n    }\n  ]\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/conversations",
@@ -188,7 +188,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"provider\": \"anthropic\",\n  \"title\": \"My chat\",\n  \"model\": \"claude-haiku-4-5\"\n}"
+                  "raw": "{\n  \"provider\": \"anthropic\",\n  \"title\": \"Pakistan trip planner\",\n  \"model\": \"claude-haiku-4-5\",\n  \"systemPromptType\": \"travel_agent_pakistan\"\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/sessions",

@@ -67,6 +67,8 @@ Create or edit `.env` at the repo root (see table below). Do not commit secrets.
 | `REDIS_HOST` / `REDIS_PORT` | Redis cache (host port `6380` maps to container `6379`) |
 | `ANTHROPIC_API_KEY` | Anthropic key (anthropic-service only) |
 | `ANTHROPIC_DEFAULT_MODEL` | Default model (currently `claude-haiku-4-5`) |
+| `ANTHROPIC_PROMPT_CACHING` | Enable Anthropic ephemeral prompt caching (`true` / `false`, default `true`) |
+| `DEFAULT_PROVIDER` | Default AI provider when request omits `provider` (`anthropic`) |
 | `TYPEORM_SYNC` | `true` in dev to auto-create schema |
 
 ## Infrastructure
@@ -129,11 +131,13 @@ POST /conversations
 Content-Type: application/json
 
 {
-  "provider": "anthropic",
   "messageType": "one_shot",
-  "messages": [{ "role": "user", "content": "Hello" }]
+  "systemPromptType": "travel_agent_pakistan",
+  "messages": [{ "role": "user", "content": "Plan a weekend in Lahore" }]
 }
 ```
+
+Optional `provider` selects the AI backend (`anthropic` | `openai`). When omitted, uses `DEFAULT_PROVIDER` from `.env` (default `anthropic`). Optional `systemPromptType` selects a configured persona. When omitted, defaults to `travel_agent_pakistan`. Prompts are defined in `libs/shared/src/constants/system-prompts.ts`.
 
 ```http
 POST /conversations/stream
@@ -141,13 +145,19 @@ Content-Type: application/json
 Accept: text/event-stream
 
 {
-  "provider": "anthropic",
   "messageType": "stream",
+  "systemPromptType": "travel_agent_pakistan",
   "messages": [{ "role": "user", "content": "Hello" }]
 }
 ```
 
 `messageType`: `one_shot` | `conversation` | `stream`
+
+**Available `systemPromptType` values:**
+
+| Value | Persona |
+|-------|---------|
+| `travel_agent_pakistan` | Expert travel agent for Pakistan (default) |
 
 ### Session-based multi-turn chat
 
@@ -157,8 +167,14 @@ History is stored in Postgres per session.
 POST /sessions
 Content-Type: application/json
 
-{ "provider": "anthropic", "title": "My chat", "model": "claude-haiku-4-5" }
+{
+  "title": "Pakistan trip planner",
+  "model": "claude-haiku-4-5",
+  "systemPromptType": "travel_agent_pakistan"
+}
 ```
+
+`provider` is optional on create (same `DEFAULT_PROVIDER` default as conversations). `systemPromptType` is set once at session creation and reused for every message. Defaults to `travel_agent_pakistan` when omitted.
 
 ```http
 POST /sessions/:id/messages
@@ -184,11 +200,37 @@ Session chat loads full history from the database, appends the user turn, calls 
 
 | Table | Purpose |
 |-------|---------|
-| `conversation_sessions` | Chat sessions (`provider`, `model`, `title`) |
+| `conversation_sessions` | Chat sessions (`provider`, `model`, `title`, `systemPromptType`) |
 | `conversation_messages` | User/assistant messages per session |
 | `ai_requests` | Audit log (provider, status, payload hash, timestamps) |
 
 Only `conversation-service` uses Postgres and Redis. `anthropic-service` has no database access.
+
+## Caching
+
+Two independent cache layers:
+
+| Layer | Service | What is cached | TTL |
+|-------|---------|----------------|-----|
+| **Redis response cache** | conversation-service | Full response for identical `one_shot` requests | `REDIS_TTL` (default 300s) |
+| **Anthropic ephemeral prompt cache** | anthropic-service | Stable prompt prefix (system + prior turns) on Anthropic servers | 5 minutes (refreshed on hit) |
+
+Anthropic prompt caching is controlled by `ANTHROPIC_PROMPT_CACHING` (default `true`). When enabled, `anthropic-service` sends `cache_control: { type: 'ephemeral' }` on the system block and at the request top level for automatic multi-turn breakpoint advancement.
+
+Sync responses may include cache usage in `usage`:
+
+```json
+{
+  "usage": {
+    "inputTokens": 100,
+    "outputTokens": 20,
+    "cacheCreationInputTokens": 80,
+    "cacheReadInputTokens": 0
+  }
+}
+```
+
+Anthropic only caches prefixes above a model-specific minimum token count (e.g. 4,096 tokens for Haiku 4.5). Shorter prompts may skip caching silently until the prefix grows.
 
 ## RabbitMQ patterns
 
@@ -209,7 +251,7 @@ Defined in `libs/shared/src/constants/rmq-patterns.ts`:
 
 ## Provider factory
 
-The `provider` field in requests routes to the correct adapter:
+The `provider` field in requests routes to the correct adapter. When omitted, conversation-service uses `DEFAULT_PROVIDER` from `.env`.
 
 - `anthropic` → `anthropic-service` (implemented)
 - `openai` → stub for future `openai-service`

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiRequest } from '@app/database';
-import { AiRequestStatus, ConversationRequestDto } from '@app/shared';
+import { AiRequestStatus, AiProvider, ConversationRequestDto } from '@app/shared';
 import { hashPayload, truncateSummary } from '@app/shared';
 
 @Injectable()
@@ -13,7 +13,7 @@ export class AuditService {
   ) {}
 
   async createPending(
-    dto: ConversationRequestDto,
+    dto: ConversationRequestDto & { provider: AiProvider },
     correlationId?: string,
   ): Promise<AiRequest> {
     const record = this.aiRequestRepository.create({

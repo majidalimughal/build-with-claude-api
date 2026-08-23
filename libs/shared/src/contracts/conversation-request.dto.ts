@@ -9,6 +9,7 @@ import {
 import { Type } from 'class-transformer';
 import { AiProvider } from '../enums/ai-provider.enum';
 import { MessageType } from '../enums/message-type.enum';
+import { SystemPromptType } from '../enums/system-prompt-type.enum';
 
 export class MessageDto {
   @IsString()
@@ -19,8 +20,9 @@ export class MessageDto {
 }
 
 export class ConversationRequestDto {
+  @IsOptional()
   @IsEnum(AiProvider)
-  provider: AiProvider;
+  provider?: AiProvider;
 
   @IsEnum(MessageType)
   messageType: MessageType;
@@ -41,4 +43,8 @@ export class ConversationRequestDto {
   @IsOptional()
   @IsString()
   correlationId?: string;
+
+  @IsOptional()
+  @IsEnum(SystemPromptType)
+  systemPromptType?: SystemPromptType;
 }

@@ -8,12 +8,15 @@ import {
   ConversationSession,
 } from '@app/database';
 import {
+  AiProvider,
   ChatResponse,
   ConversationRequestDto,
   CreateSessionDto,
+  DEFAULT_SYSTEM_PROMPT_TYPE,
   MessageRole,
   MessageType,
   ProviderInvokeDto,
+  resolveSystemPrompt,
   SessionGetMessagesPayload,
   SessionMessageResponse,
   SessionResponse,
@@ -32,6 +35,7 @@ interface StreamSessionState {
 @Injectable()
 export class SessionService {
   private readonly defaultModel: string;
+  private readonly defaultProvider: AiProvider;
   private readonly streamSessions = new Map<string, StreamSessionState>();
 
   constructor(
@@ -47,13 +51,18 @@ export class SessionService {
       'ANTHROPIC_DEFAULT_MODEL',
       'claude-haiku-4-5',
     );
+    this.defaultProvider = config.get<AiProvider>(
+      'DEFAULT_PROVIDER',
+      AiProvider.ANTHROPIC,
+    );
   }
 
   async create(dto: CreateSessionDto): Promise<SessionResponse> {
     const session = this.sessionRepository.create({
-      provider: dto.provider,
+      provider: dto.provider ?? this.defaultProvider,
       model: dto.model ?? null,
       title: dto.title ?? null,
+      systemPromptType: dto.systemPromptType ?? DEFAULT_SYSTEM_PROMPT_TYPE,
     });
     const saved = await this.sessionRepository.save(session);
     return this.toSessionResponse(saved);
@@ -202,7 +211,7 @@ export class SessionService {
     session: ConversationSession,
     messages: ConversationMessage[],
     correlationId?: string,
-  ): ConversationRequestDto {
+  ): ConversationRequestDto & { provider: AiProvider } {
     return {
       provider: session.provider,
       messageType: MessageType.CONVERSATION,
@@ -212,6 +221,7 @@ export class SessionService {
       })),
       model: session.model ?? undefined,
       correlationId,
+      systemPromptType: session.systemPromptType,
     };
   }
 
@@ -229,6 +239,7 @@ export class SessionService {
       })),
       stream,
       correlationId,
+      system: resolveSystemPrompt(session.systemPromptType),
     };
   }
 
@@ -238,6 +249,7 @@ export class SessionService {
       provider: session.provider,
       model: session.model,
       title: session.title,
+      systemPromptType: session.systemPromptType,
       createdAt: session.createdAt,
     };
   }

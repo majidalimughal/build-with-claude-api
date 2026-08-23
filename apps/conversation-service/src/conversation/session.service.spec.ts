@@ -9,6 +9,8 @@ import {
   AiProvider,
   MessageRole,
   MessageType,
+  SystemPromptType,
+  resolveSystemPrompt,
 } from '@app/shared';
 import { AiProviderFactory } from '../ai/ai-provider.factory';
 import { AuditService } from './audit.service';
@@ -22,6 +24,7 @@ describe('SessionService', () => {
     provider: AiProvider.ANTHROPIC,
     model: null,
     title: 'Test',
+    systemPromptType: SystemPromptType.TRAVEL_AGENT_PAKISTAN,
     messages: [],
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
@@ -79,7 +82,14 @@ describe('SessionService', () => {
         { provide: AuditService, useValue: auditService },
         {
           provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValue('claude-haiku-4-5') },
+          useValue: {
+            get: jest.fn((key: string, fallback?: string) => {
+              if (key === 'DEFAULT_PROVIDER') {
+                return AiProvider.ANTHROPIC;
+              }
+              return fallback ?? 'claude-haiku-4-5';
+            }),
+          },
         },
       ],
     }).compile();
@@ -94,6 +104,18 @@ describe('SessionService', () => {
     });
 
     expect(result.id).toBe('session-1');
+    expect(result.provider).toBe(AiProvider.ANTHROPIC);
+    expect(result.systemPromptType).toBe(SystemPromptType.TRAVEL_AGENT_PAKISTAN);
+  });
+
+  it('defaults provider from env when omitted on create', async () => {
+    const result = await service.create({
+      title: 'No provider',
+    });
+
+    expect(sessionRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: AiProvider.ANTHROPIC }),
+    );
     expect(result.provider).toBe(AiProvider.ANTHROPIC);
   });
 
@@ -111,6 +133,7 @@ describe('SessionService', () => {
       messages: [{ role: MessageRole.USER, content: 'Hello' }],
       stream: false,
       correlationId: undefined,
+      system: resolveSystemPrompt(SystemPromptType.TRAVEL_AGENT_PAKISTAN),
     });
     expect(auditService.createPending).toHaveBeenCalledWith(
       expect.objectContaining({ messageType: MessageType.CONVERSATION }),
@@ -131,6 +154,7 @@ describe('SessionService', () => {
       ],
       stream: false,
       correlationId: undefined,
+      system: resolveSystemPrompt(SystemPromptType.TRAVEL_AGENT_PAKISTAN),
     });
   });
 

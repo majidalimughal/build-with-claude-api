@@ -1,10 +1,12 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { AiProvider } from '../enums/ai-provider.enum';
 import { MessageRole } from '../enums/message-role.enum';
+import { SystemPromptType } from '../enums/system-prompt-type.enum';
 
 export class CreateSessionDto {
+  @IsOptional()
   @IsEnum(AiProvider)
-  provider: AiProvider;
+  provider?: AiProvider;
 
   @IsOptional()
   @IsString()
@@ -13,6 +15,10 @@ export class CreateSessionDto {
   @IsOptional()
   @IsString()
   title?: string;
+
+  @IsOptional()
+  @IsEnum(SystemPromptType)
+  systemPromptType?: SystemPromptType;
 }
 
 export class SendSessionMessageDto {
@@ -25,6 +31,7 @@ export interface SessionResponse {
   provider: AiProvider;
   model: string | null;
   title: string | null;
+  systemPromptType: SystemPromptType;
   createdAt: Date;
 }
 

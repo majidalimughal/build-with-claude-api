@@ -13,9 +13,10 @@ import { CONVERSATION_EVENTS_CLIENT } from './anthropic.constants';
 export class AnthropicService {
   private readonly client: Anthropic;
   private readonly defaultModel: string;
+  private readonly promptCachingEnabled: boolean;
 
   constructor(
-    config: ConfigService,
+    private readonly config: ConfigService,
     @Inject(CONVERSATION_EVENTS_CLIENT)
     private readonly eventsClient: ClientProxy,
   ) {
@@ -26,19 +27,15 @@ export class AnthropicService {
       'ANTHROPIC_DEFAULT_MODEL',
       'claude-haiku-4-5',
     );
+    this.promptCachingEnabled =
+      config.get<string>('ANTHROPIC_PROMPT_CACHING', 'true') !== 'false';
   }
 
   async invoke(dto: ProviderInvokeDto): Promise<ProviderInvokeResponse> {
     try {
-      const response = await this.client.messages.create({
-        model: dto.model || this.defaultModel,
-        max_tokens: dto.maxTokens ?? 1024,
-        messages: dto.messages.map((message) => ({
-          role: message.role as 'user' | 'assistant',
-          content: message.content,
-        })),
-        ...(dto.options ?? {}),
-      });
+      const response = (await this.client.messages.create(
+        this.buildCreateParams(dto),
+      )) as Anthropic.Message;
 
       const textBlock = response.content.find((block) => block.type === 'text');
       const content = textBlock?.type === 'text' ? textBlock.text : '';
@@ -48,6 +45,9 @@ export class AnthropicService {
         usage: {
           inputTokens: response.usage.input_tokens,
           outputTokens: response.usage.output_tokens,
+          cacheCreationInputTokens:
+            response.usage.cache_creation_input_tokens ?? undefined,
+          cacheReadInputTokens: response.usage.cache_read_input_tokens ?? undefined,
         },
       };
     } catch (error) {
@@ -64,14 +64,8 @@ export class AnthropicService {
 
     try {
       const stream = await this.client.messages.create({
-        model: dto.model || this.defaultModel,
-        max_tokens: dto.maxTokens ?? 1024,
+        ...this.buildCreateParams(dto),
         stream: true,
-        messages: dto.messages.map((message) => ({
-          role: message.role as 'user' | 'assistant',
-          content: message.content,
-        })),
-        ...(dto.options ?? {}),
       });
 
       for await (const event of stream) {
@@ -96,6 +90,38 @@ export class AnthropicService {
     }
 
     return { started: true };
+  }
+
+  private buildCreateParams(
+    dto: ProviderInvokeDto,
+  ): Anthropic.MessageCreateParamsNonStreaming {
+    const { stream: _stream, ...options } = dto.options ?? {};
+
+    return {
+      model: dto.model || this.defaultModel,
+      max_tokens: dto.maxTokens ?? 1024,
+      ...(this.promptCachingEnabled
+        ? { cache_control: { type: 'ephemeral' as const } }
+        : {}),
+      ...(dto.system
+        ? {
+            system: [
+              {
+                type: 'text' as const,
+                text: dto.system,
+                ...(this.promptCachingEnabled
+                  ? { cache_control: { type: 'ephemeral' as const } }
+                  : {}),
+              },
+            ],
+          }
+        : {}),
+      messages: dto.messages.map((message) => ({
+        role: message.role as 'user' | 'assistant',
+        content: message.content,
+      })),
+      ...options,
+    };
   }
 
   private extractErrorMessage(error: unknown): string {
